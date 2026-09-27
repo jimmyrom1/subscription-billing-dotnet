@@ -1,0 +1,23 @@
+services:
+  subscription-billing-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: subscription-billing-api
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Data Source=/app/data/billing.db
+    volumes:
+      - billing_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  billing_data:

@@ -1,0 +1,59 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Build, Test & Smoke Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore SubscriptionBilling.slnx
+
+      - name: Build solution (Release)
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Run Test Suite with Coverage
+        run: dotnet test --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage"
+
+      - name: Run API in background for Smoke Test
+        run: |
+          dotnet run --project src/SubscriptionBilling.Api/SubscriptionBilling.Api.csproj --configuration Release --no-build &
+          sleep 4
+          
+          echo "Checking healthz..."
+          curl -f http://localhost:8080/healthz
+
+          echo "Querying plans catalog..."
+          curl -f http://localhost:8080/api/plans
+
+          echo "Testing Subscription creation with Idempotency Key..."
+          IDEM_KEY="ci-smoke-$(date +%s)"
+          RESP1=$(curl -s -i -X POST http://localhost:8080/api/subscriptions \
+            -H "Content-Type: application/json" \
+            -H "Idempotency-Key: $IDEM_KEY" \
+            -d '{"customerId":"ci_user_1","customerEmail":"ci@corp.com","planId":"plan_starter"}')
+          
+          echo "$RESP1" | grep "201 Created"
+
+          echo "Replaying exact request with same Idempotency Key..."
+          RESP2=$(curl -s -i -X POST http://localhost:8080/api/subscriptions \
+            -H "Content-Type: application/json" \
+            -H "Idempotency-Key: $IDEM_KEY" \
+            -d '{"customerId":"ci_user_1","customerEmail":"ci@corp.com","planId":"plan_starter"}')
+
+          echo "$RESP2" | grep "X-Idempotent-Replay: true"
+          echo "CI Smoke tests passed successfully!"
