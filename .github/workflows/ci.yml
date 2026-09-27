@@ -31,7 +31,7 @@ jobs:
 
       - name: Run API in background for Smoke Test
         run: |
-          dotnet run --project src/SubscriptionBilling.Api/SubscriptionBilling.Api.csproj --configuration Release --no-build &
+          dotnet run --project src/SubscriptionBilling.Api/SubscriptionBilling.Api.csproj --configuration Release --no-build --urls "http://localhost:8080" &
           sleep 4
           
           echo "Checking healthz..."
